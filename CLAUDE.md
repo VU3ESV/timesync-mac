@@ -19,6 +19,40 @@ open ~/Library/Developer/Xcode/DerivedData/TimeSync-*/Build/Products/Debug/TimeS
 
 `TimeSync.xcodeproj` is **gitignored** — `project.yml` is the source of truth. Regenerate after any structural change. Brew dependency: `xcodegen`.
 
+## Release (universal binary, signed + notarized + stapled)
+
+Notarization keychain profile is **`timesync`** (created once via `xcrun notarytool store-credentials timesync --apple-id vu2cpl@gmail.com --team-id CHVNJ85C9F`). Do not assume the default `AC_PASSWORD` name. Verify the profile exists with `xcrun notarytool history --keychain-profile timesync`.
+
+```bash
+# 1. Bump version in project.yml: MARKETING_VERSION + CURRENT_PROJECT_VERSION
+
+# 2. Regenerate + universal Release build (Debug defaults to ONLY_ACTIVE_ARCH=YES,
+#    so the arch flags must be forced explicitly or the binary ships arm64-only)
+./generate.sh
+rm -rf build
+xcodebuild -project TimeSync.xcodeproj -scheme TimeSync \
+  -configuration Release -derivedDataPath build \
+  ONLY_ACTIVE_ARCH=NO ARCHS="arm64 x86_64" build
+
+APP=build/Build/Products/Release/TimeSync.app
+lipo -info "$APP/Contents/MacOS/TimeSync"        # expect: x86_64 arm64
+lipo -info "$APP/Contents/MacOS/TimeSyncHelper"  # expect: x86_64 arm64
+
+# 3. Submit, staple, repack
+ditto -c -k --keepParent "$APP" /tmp/TimeSync-submit.zip
+xcrun notarytool submit /tmp/TimeSync-submit.zip --keychain-profile timesync --wait
+xcrun stapler staple "$APP"
+spctl -a -vvv "$APP"                              # expect: Notarized Developer ID, accepted
+ditto -c -k --keepParent "$APP" TimeSync-X.Y.Z.zip
+shasum -a 256 TimeSync-X.Y.Z.zip                  # paste into release notes
+
+# 4. Tag + GitHub release
+git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
+gh release create vX.Y.Z TimeSync-X.Y.Z.zip --title "..." --notes-file ...
+```
+
+Use `ditto -c -k --keepParent`, never `zip -r` — `zip` mangles xattrs/symlinks inside .app bundles and Gatekeeper rejects the unpacked app. Staple the .app *before* the final zip, not the zip itself; otherwise users hit Apple's notary network on first launch (slow, fails offline).
+
 The app is `LSUIElement = true` (no Dock icon, menubar only). To inspect runtime behavior, run the binary directly so `NSLog` goes to stderr:
 
 ```bash
