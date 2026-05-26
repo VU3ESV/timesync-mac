@@ -39,7 +39,7 @@ The companion `server/` directory turns your Mac into a stratum-2 NTP server for
 
 ## Requirements
 
-- macOS 14 (Sonoma) or later, Apple Silicon
+- macOS 14 (Sonoma) or later — universal binary, runs on Apple Silicon and Intel
 - A USB GPS receiver — anything that emits NMEA at 4800 or 9600 baud. Tested with a u-blox 7 module on an FTDI cable.
 - For the optional NTP server: [Homebrew](https://brew.sh)
 

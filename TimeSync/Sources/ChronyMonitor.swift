@@ -64,8 +64,20 @@ final class ChronyMonitor: ObservableObject {
     private let pollIntervalSeconds: Int
     private var pollTask: Task<Void, Never>?
 
-    init(chronycPath: String = "/opt/homebrew/bin/chronyc", pollIntervalSeconds: Int = 5) {
-        self.chronycPath = chronycPath
+    /// Apple Silicon brew lives at /opt/homebrew, Intel brew at /usr/local. Probe
+    /// both so a single universal build works on either host.
+    private static let chronycCandidates = [
+        "/opt/homebrew/bin/chronyc",
+        "/usr/local/bin/chronyc",
+    ]
+
+    static func defaultChronycPath() -> String {
+        chronycCandidates.first { FileManager.default.fileExists(atPath: $0) }
+            ?? chronycCandidates[0]
+    }
+
+    init(chronycPath: String? = nil, pollIntervalSeconds: Int = 5) {
+        self.chronycPath = chronycPath ?? Self.defaultChronycPath()
         self.pollIntervalSeconds = pollIntervalSeconds
     }
 
